@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/34063093/README.md)
 # Windows Server 2025 Active Directory Lab
 
 A small company domain built from scratch in VirtualBox: a domain controller with AD DS, DNS and DHCP, a domain-joined Windows client, department OUs and users created with PowerShell, Group Policies, a permission-controlled file share, and real troubleshooting tickets.

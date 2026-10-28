@@ -1,0 +1,3 @@
+# Reports can contain lab hostnames/IPs - review before committing
+*.html
+BulkUsers_Report_*.csv
