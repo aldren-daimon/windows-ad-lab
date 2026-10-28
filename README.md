@@ -16,22 +16,22 @@ A small company domain built from scratch in VirtualBox: a domain controller wit
    +----------------+----------------+
    |  DC01  (Windows Server 2025)    |
    |  AD DS · DNS · DHCP · File share|
-   |  192.168.10.10  /  dre.lab      |
+   |  10.0.0.1  /  lab.local      |
    +----------------+----------------+
                     |
          Internal network "labnet"
-            192.168.10.0/24
+            10.0.0.0/24
                     |
    +----------------+----------------+
    |  CLIENT01 (Windows 11 Pro/Ent)  |
-   |  DHCP 192.168.10.100-200        |
+   |  DHCP 10.0.0.10-200        |
    +---------------------------------+
 ```
 
 | Item | Value |
 |---|---|
-| Domain | `dre.lab` (NetBIOS `DRE`) |
-| Domain controller | `DC01` – 192.168.10.10 – 2 vCPU, 4 GB RAM, 60 GB |
+| Domain | `lab.local` (NetBIOS `LAB`) |
+| Domain controller | `DC01` – 10.0.0.1 – 2 vCPU, 4 GB RAM, 60 GB |
 | Client | `CLIENT01` – Windows 11 Pro or Enterprise evaluation, 4 GB RAM |
 | OUs | IT, HR, Finance, Operations |
 | Groups | IT-Staff, HR-Staff, Finance-Staff, Ops-Staff |
@@ -42,20 +42,20 @@ A small company domain built from scratch in VirtualBox: a domain controller wit
 
 ### 1. Domain controller
 
-VM network: Adapter 1 = NAT (internet), Adapter 2 = Internal Network `labnet`.
+VM network: one adapter on Internal Network `labnet` (static IP, no internet needed for the lab).
 
 ```powershell
 Rename-Computer -NewName DC01 -Restart
 
-Get-NetAdapter      # find the internal adapter, usually "Ethernet 2"
-New-NetIPAddress -InterfaceAlias "Ethernet 2" -IPAddress 192.168.10.10 -PrefixLength 24
-Set-DnsClientServerAddress -InterfaceAlias "Ethernet 2" -ServerAddresses 127.0.0.1
+Get-NetAdapter      # the lab adapter is "Ethernet"
+New-NetIPAddress -InterfaceAlias "Ethernet" -IPAddress 10.0.0.1 -PrefixLength 24
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses 127.0.0.1
 
 Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
-Install-ADDSForest -DomainName "dre.lab" -DomainNetbiosName "DRE" -InstallDns
+Install-ADDSForest -DomainName "lab.local" -DomainNetbiosName "LAB" -InstallDns
 ```
 
-Check after the restart (log in as `DRE\Administrator`):
+Check after the restart (log in as `LAB\Administrator`):
 
 ```powershell
 Get-ADDomain
@@ -68,9 +68,9 @@ Get-Service adws, kdc, netlogon, dns
 
 ```powershell
 Install-WindowsFeature DHCP -IncludeManagementTools
-Add-DhcpServerInDC -DnsName dc01.dre.lab -IPAddress 192.168.10.10
-Add-DhcpServerv4Scope -Name "Lab LAN" -StartRange 192.168.10.100 -EndRange 192.168.10.200 -SubnetMask 255.255.255.0
-Set-DhcpServerv4OptionValue -ScopeId 192.168.10.0 -DnsServer 192.168.10.10 -DnsDomain dre.lab
+Add-DhcpServerInDC -DnsName dc01.lab.local -IPAddress 10.0.0.1
+Add-DhcpServerv4Scope -Name "Lab LAN" -StartRange 10.0.0.10 -EndRange 10.0.0.200 -SubnetMask 255.255.255.0
+Set-DhcpServerv4OptionValue -ScopeId 10.0.0.0 -DnsServer 10.0.0.1 -DnsDomain lab.local
 Get-DhcpServerv4Scope
 ```
 
@@ -81,10 +81,10 @@ Get-DhcpServerv4Scope
 Client VM: one adapter on Internal Network `labnet`. Use Windows 11 **Pro or Enterprise** (Home can't join a domain).
 
 ```powershell
-ipconfig /all                     # should show 192.168.10.1xx and DNS 192.168.10.10
-nslookup dre.lab                  # must answer from 192.168.10.10
+ipconfig /all                     # should show 10.0.0.1xx and DNS 10.0.0.1
+nslookup lab.local                  # must answer from 10.0.0.1
 Rename-Computer -NewName CLIENT01 -Restart
-Add-Computer -DomainName dre.lab -Credential DRE\Administrator -Restart
+Add-Computer -DomainName lab.local -Credential LAB\Administrator -Restart
 ```
 
 ![Client joined](screenshots/03-client-joined.png)
@@ -106,7 +106,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 ### 5. Password and lockout policy
 
 ```powershell
-Set-ADDefaultDomainPasswordPolicy -Identity dre.lab -MinPasswordLength 12 -ComplexityEnabled $true `
+Set-ADDefaultDomainPasswordPolicy -Identity lab.local -MinPasswordLength 12 -ComplexityEnabled $true `
   -LockoutThreshold 5 -LockoutDuration 00:15:00 -LockoutObservationWindow 00:15:00
 Get-ADDefaultDomainPasswordPolicy
 ```
@@ -119,15 +119,15 @@ Only Finance-Staff (and admins) can open the Finance folder.
 
 ```powershell
 New-Item -Path C:\Shares\Finance -ItemType Directory
-New-SmbShare -Name Finance -Path C:\Shares\Finance -FullAccess "DRE\Domain Admins" -ChangeAccess "DRE\Finance-Staff"
-icacls C:\Shares\Finance /inheritance:r /grant "DRE\Domain Admins:(OI)(CI)F" "DRE\Finance-Staff:(OI)(CI)M" "SYSTEM:(OI)(CI)F"
+New-SmbShare -Name Finance -Path C:\Shares\Finance -FullAccess "LAB\Domain Admins" -ChangeAccess "LAB\Finance-Staff"
+icacls C:\Shares\Finance /inheritance:r /grant "LAB\Domain Admins:(OI)(CI)F" "LAB\Finance-Staff:(OI)(CI)M" "SYSTEM:(OI)(CI)F"
 ```
 
 ### 7. Group Policies
 
 ```powershell
-New-GPO -Name "Finance - Map S drive" | New-GPLink -Target "OU=Finance,DC=dre,DC=lab"
-New-GPO -Name "HR - Block USB storage" | New-GPLink -Target "OU=HR,DC=dre,DC=lab"
+New-GPO -Name "Finance - Map S drive" | New-GPLink -Target "OU=Finance,DC=lab,DC=local"
+New-GPO -Name "HR - Block USB storage" | New-GPLink -Target "OU=HR,DC=lab,DC=local"
 ```
 
 Settings (in Group Policy Management, right-click the GPO > Edit):

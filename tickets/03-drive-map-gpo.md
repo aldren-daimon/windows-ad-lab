@@ -31,7 +31,7 @@ The drive map GPO is linked to the Finance OU. GPOs apply by where the object si
 
 ## Fix
 ```powershell
-Get-ADUser malotaibi | Move-ADObject -TargetPath "OU=Finance,DC=dre,DC=lab"
+Get-ADUser malotaibi | Move-ADObject -TargetPath "OU=Finance,DC=lab,DC=local"
 ```
 Then on the client: `gpupdate /force`, sign out and in again. The S: drive appeared.
 
